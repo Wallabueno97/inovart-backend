@@ -425,70 +425,6 @@ async def delete_review(review_id: str, email: str = Depends(verify_token)):
     except Exception as e:
         logger.error(f"Error deleting review: {e}")
         raise HTTPException(status_code=500, detail="Error deleting review")
-
-# ============ APPOINTMENTS ENDPOINTS ============
-@api_router.get("/appointments", response_model=List[Appointment])
-async def get_appointments(email: str = Depends(verify_token)):
-    try:
-        appointments = await db.appointments.find().sort("createdAt", -1).to_list(100)
-        return appointments
-    except Exception as e:
-        logger.error(f"Error fetching appointments: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching appointments")
-
-@api_router.post("/appointments", response_model=Appointment)
-async def create_appointment(appointment_data: AppointmentBase):
-    try:
-        appointment = Appointment(**appointment_data.dict())
-        await db.appointments.insert_one(appointment.dict())
-        logger.info(f"New appointment created by {appointment.customerName}")
-        
-        # Send WhatsApp notification
-        send_whatsapp_notification(appointment.dict())
-        
-        return appointment
-    except Exception as e:
-        logger.error(f"Error creating appointment: {e}")
-        raise HTTPException(status_code=500, detail="Error creating appointment")
-
-@api_router.put("/appointments/{appointment_id}", response_model=Appointment)
-async def update_appointment(appointment_id: str, appointment_data: AppointmentUpdate, email: str = Depends(verify_token)):
-    try:
-        update_data = {k: v for k, v in appointment_data.dict().items() if v is not None}
-        if not update_data:
-            raise HTTPException(status_code=400, detail="No data to update")
-        
-        result = await db.appointments.find_one_and_update(
-            {"id": appointment_id},
-            {"$set": update_data},
-            return_document=True
-        )
-        if not result:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-        
-        logger.info(f"Appointment updated by {email}: {appointment_id}")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating appointment: {e}")
-        raise HTTPException(status_code=500, detail="Error updating appointment")
-
-@api_router.delete("/appointments/{appointment_id}")
-async def delete_appointment(appointment_id: str, email: str = Depends(verify_token)):
-    try:
-        result = await db.appointments.delete_one({"id": appointment_id})
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-        
-        logger.info(f"Appointment deleted by {email}: {appointment_id}")
-        return {"message": "Appointment deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting appointment: {e}")
-        raise HTTPException(status_code=500, detail="Error deleting appointment")
-
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -509,3 +445,10 @@ async def startup_event():
 async def shutdown_db_client():
     client.close()
     logger.info("Database connection closed")
+
+import uvicorn
+import os
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
